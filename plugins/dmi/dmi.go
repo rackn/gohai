@@ -67,6 +67,7 @@ func Gather() (res *Info, err error) {
 	}
 	for _, device := range res.Memory.Devices {
 		res.Memory.Size += device.Size
+		res.Memory.TotalSlots += 1
 		if device.Size != 0 {
 			res.Memory.PopulatedSlots += 1
 		}
