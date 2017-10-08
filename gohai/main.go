@@ -7,6 +7,7 @@ import (
 
 	"github.com/rackn/gohai/plugins/dmi"
 	"github.com/rackn/gohai/plugins/net"
+	"github.com/rackn/gohai/plugins/system"
 )
 
 type info interface {
@@ -25,6 +26,11 @@ func main() {
 		log.Fatalf("Failed to gather network info: %v", err)
 	}
 	infos[netInfo.Class()] = netInfo
+	sysInfo, err := system.Gather()
+	if err != nil {
+		log.Fatalf("Failed to gather basic OS info: %v", err)
+	}
+	infos[sysInfo.Class()] = sysInfo
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
 	enc.Encode(infos)
