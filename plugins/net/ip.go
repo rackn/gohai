@@ -3,7 +3,6 @@ package net
 import (
 	"encoding/binary"
 	"fmt"
-	"log"
 	"net"
 	"reflect"
 	"syscall"
@@ -164,11 +163,22 @@ func (h HardwareAddr) MarshalText() ([]byte, error) {
 	return []byte(h.String()), nil
 }
 
+type IPNet net.IPNet
+
+func (n *IPNet) String() string {
+	return (*net.IPNet)(n).String()
+}
+
+func (n *IPNet) MarshalText() ([]byte, error) {
+	return []byte(n.String()), nil
+}
+
 type Interface struct {
 	Name            string
 	MTU             int
 	Flags           Flags
 	HardwareAddr    HardwareAddr
+	Addrs           []*IPNet
 	Supported       []ModeBit
 	Advertised      []ModeBit
 	PeerAdvertised  []ModeBit
@@ -179,7 +189,6 @@ type Interface struct {
 
 func toModeBits(buf []byte) []ModeBit {
 	res := []ModeBit{}
-	log.Printf("modebuf: %v", buf)
 	for segment, bits := range buf {
 		if segment >= len(modeBits) {
 			break
@@ -244,12 +253,10 @@ func (i *Interface) fillGlink(buf []byte) error {
 	i.Speed = endian.Uint32(buf[4:8])
 	i.Duplex = buf[8] != 0
 	i.Autonegotiation = buf[11] != 0
-	log.Printf("buflen: %v, modelen: %v", len(buf), buf[15])
 	b := int(buf[15]) << 2
 	s := 48
 	a := 48 + b
 	p := a + b
-	log.Printf("s: %d, a: %d, p: %d, e: %d", s, a, p, p+b)
 	i.Supported = toModeBits(buf[s : s+b])
 	i.Advertised = toModeBits(buf[a : a+b])
 	i.PeerAdvertised = toModeBits(buf[p : p+b])
@@ -305,6 +312,17 @@ func Gather() (*Info, error) {
 			Supported:      []ModeBit{},
 			Advertised:     []ModeBit{},
 			PeerAdvertised: []ModeBit{},
+		}
+		addrs, err := intf.Addrs()
+		if err != nil {
+			return nil, err
+		}
+		iface.Addrs = []*IPNet{}
+		for i := range addrs {
+			addr, ok := addrs[i].(*net.IPNet)
+			if ok {
+				iface.Addrs = append(iface.Addrs, (*IPNet)(addr))
+			}
 		}
 		iface.Fill()
 		res.Interfaces[i] = iface
