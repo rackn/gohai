@@ -289,7 +289,9 @@ func (i *Interface) Fill() error {
 }
 
 type Info struct {
-	Interfaces []Interface
+	Interfaces    []Interface
+	HardwareAddrs map[string]string
+	Addrs         map[string]string
 }
 
 func (i *Info) Class() string {
@@ -303,6 +305,8 @@ func Gather() (*Info, error) {
 		return nil, err
 	}
 	res.Interfaces = make([]Interface, len(baseifs))
+	res.HardwareAddrs = map[string]string{}
+	res.Addrs = map[string]string{}
 	for i, intf := range baseifs {
 		iface := Interface{
 			Name:           intf.Name,
@@ -313,6 +317,9 @@ func Gather() (*Info, error) {
 			Advertised:     []ModeBit{},
 			PeerAdvertised: []ModeBit{},
 		}
+		if iface.HardwareAddr != nil && len(iface.HardwareAddr) > 0 {
+			res.HardwareAddrs[iface.HardwareAddr.String()] = iface.Name
+		}
 		addrs, err := intf.Addrs()
 		if err != nil {
 			return nil, err
@@ -321,6 +328,7 @@ func Gather() (*Info, error) {
 		for i := range addrs {
 			addr, ok := addrs[i].(*net.IPNet)
 			if ok {
+				res.Addrs[addr.String()] = iface.Name
 				iface.Addrs = append(iface.Addrs, (*IPNet)(addr))
 			}
 		}
