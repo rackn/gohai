@@ -1,0 +1,3 @@
+package: github.com/rackn/gohai
+import:
+- package: github.com/VictorLowther/godmi
