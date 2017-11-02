@@ -7,6 +7,7 @@ import (
 
 	"github.com/rackn/gohai/plugins/dmi"
 	"github.com/rackn/gohai/plugins/net"
+	"github.com/rackn/gohai/plugins/storage"
 	"github.com/rackn/gohai/plugins/system"
 )
 
@@ -31,6 +32,11 @@ func main() {
 		log.Fatalf("Failed to gather basic OS info: %v", err)
 	}
 	infos[sysInfo.Class()] = sysInfo
+	storInfo, err := storage.Gather()
+	if err != nil {
+		log.Fatalf("Failed tp gather storage info: %v", err)
+	}
+	infos[storInfo.Class()] = storInfo
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
 	enc.Encode(infos)
