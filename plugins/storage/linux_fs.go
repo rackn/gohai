@@ -60,7 +60,7 @@ func Gather() (*Info, error) {
 		}
 		fsStat := &syscall.Statfs_t{}
 		if err := syscall.Statfs(vol.Name, fsStat); err == nil {
-			vol.Blocks.Size = fsStat.Bsize
+			vol.Blocks.Size = int64(fsStat.Bsize)
 			vol.Blocks.Total = fsStat.Blocks
 			vol.Blocks.Free = fsStat.Bfree
 			vol.Blocks.Avail = fsStat.Bavail
