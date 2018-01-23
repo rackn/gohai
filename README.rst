@@ -15,8 +15,8 @@ gohai
   :target: https://travis-ci.org/rackn/gohai
   :alt: Build Status
 
-.. image:: https://codecov.io/gh/digitalrebar/provision/branch/master/graph/badge.svg
-  :target: https://codecov.io/gh/digitalrebar/provision
+.. image:: https://codecov.io/gh/rackn/gohai/branch/master/graph/badge.svg
+  :target: https://codecov.io/gh/rackn/gohai
   :alt: codecov
 
 .. image:: https://goreportcard.com/badge/github.com/rackn/gohai
