@@ -1,10 +1,14 @@
 package net
 
 import (
+	"bufio"
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"net"
+	"os/exec"
 	"reflect"
+	"strings"
 	"syscall"
 	"unsafe"
 )
@@ -175,6 +179,10 @@ func (n *IPNet) MarshalText() ([]byte, error) {
 
 type Interface struct {
 	Name            string
+	StableName      string
+	Model           string
+	Driver          string
+	Vendor          string
 	MTU             int
 	Flags           Flags
 	HardwareAddr    HardwareAddr
@@ -263,7 +271,45 @@ func (i *Interface) fillGlink(buf []byte) error {
 	return nil
 }
 
+func (i *Interface) fillUdev() error {
+	cmd := exec.Command("udevadm", "info", "-q", "all", "-p", "/sys/class/net/"+i.Name)
+	buf := &bytes.Buffer{}
+	cmd.Stdout = buf
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+	stableNameOrder := []string{"E: ID_NET_NAME_ONBOARD", "E: ID_NET_NAME_SLOT", "E: ID_NET_NAME_PATH"}
+	stableNames := map[string]string{}
+	sc := bufio.NewScanner(buf)
+	for sc.Scan() {
+		parts := strings.SplitN(sc.Text(), "=", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		switch parts[0] {
+		case "E: ID_MODEL_FROM_DATABASE":
+			i.Model = parts[1]
+		case "E: ID_NET_DRIVER":
+			i.Driver = parts[1]
+		case "E: ID_VENDOR_FROM_DATABASE":
+			i.Vendor = parts[1]
+		case "E: ID_NET_NAME_ONBOARD", "E: ID_NET_NAME_SLOT", "E: ID_NET_NAME_PATH":
+			stableNames[parts[0]] = parts[1]
+		}
+	}
+	for _, n := range stableNameOrder {
+		if val, ok := stableNames[n]; ok {
+			i.StableName = val
+			break
+		}
+	}
+	return nil
+}
+
 func (i *Interface) Fill() error {
+	if err := i.fillUdev(); err != nil {
+		return err
+	}
 	// First, try GLINKSETTINGS
 	buf := make([]byte, 4096)
 	req := &ifReq{}
