@@ -5,9 +5,13 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"io/ioutil"
 	"net"
+	"os"
 	"os/exec"
+	"path"
 	"reflect"
+	"strconv"
 	"strings"
 	"syscall"
 	"unsafe"
@@ -83,6 +87,75 @@ func (m ModeBit) String() string {
 		return res + " Full"
 	}
 	return res + " Half"
+}
+
+var arpHW = map[int64]string{
+	0:      "netrom",
+	1:      "ethernet",
+	2:      "experimental ethernet",
+	3:      "ax25",
+	4:      "pronet",
+	5:      "chaos",
+	6:      "ieee802",
+	7:      "arcnet",
+	8:      "appletalk",
+	15:     "dlci",
+	19:     "atm",
+	23:     "metricom",
+	24:     "ieee1394",
+	27:     "eui-64",
+	32:     "infiniband",
+	256:    "slip",
+	257:    "cslip",
+	258:    "slip6",
+	259:    "cslip6",
+	260:    "reserved",
+	264:    "adapt",
+	270:    "rose",
+	271:    "x25",
+	272:    "hwx25",
+	280:    "can",
+	512:    "ppp",
+	513:    "hdlc",
+	516:    "labp",
+	517:    "ddcmp",
+	518:    "rawhdlc",
+	519:    "rawip",
+	768:    "ipip",
+	769:    "ip6ip6",
+	770:    "frad",
+	771:    "skip",
+	772:    "loopback",
+	773:    "localtalk",
+	774:    "fddi",
+	775:    "bif",
+	776:    "sit",
+	777:    "ipddp",
+	778:    "ipgre",
+	779:    "pimreg",
+	780:    "hippi",
+	781:    "ash",
+	782:    "econet",
+	783:    "irda",
+	784:    "fcpp",
+	785:    "fcal",
+	786:    "fcpl",
+	787:    "fcfabric",
+	800:    "ieee802_tr",
+	801:    "ieee80211",
+	802:    "ieee80211_prism",
+	803:    "ieee80211_radiotap",
+	804:    "ieee802154",
+	805:    "ieee802154_monitor",
+	820:    "phonet",
+	821:    "phonet_pipe",
+	822:    "caif",
+	823:    "ip6gre",
+	824:    "netlink",
+	825:    "6lowpan",
+	826:    "vsockmon",
+	0xfffe: "none",
+	0xffff: "void",
 }
 
 var modeBits = [][8]ModeBit{
@@ -193,6 +266,31 @@ type Interface struct {
 	Speed           uint32
 	Duplex          bool
 	Autonegotiation bool
+	Sys             struct {
+		IsPhysical bool
+		BusAddress string
+		IfIndex    int64
+		IfLink     int64
+		OperState  string
+		Type       string
+		IsBridge   bool
+		Bridge     struct {
+			Members []string
+			Master  string
+		}
+		IsVlan bool
+		VLAN   struct {
+			Id     int64
+			Master string
+		}
+		IsBond bool
+		Bond   struct {
+			Mode      string
+			Members   []string
+			Master    string
+			LinkState string
+		}
+	}
 }
 
 func toModeBits(buf []byte) []ModeBit {
@@ -306,8 +404,101 @@ func (i *Interface) fillUdev() error {
 	return nil
 }
 
+func (i *Interface) sysPath(p string) string {
+	return path.Join("/sys/class/net", i.Name, p)
+}
+
+func (i *Interface) sysString(p string) string {
+	buf, err := ioutil.ReadFile(i.sysPath(p))
+	if err == nil {
+		return strings.TrimSpace(string(buf))
+	}
+	return ""
+}
+
+func (i *Interface) sysInt(p string) int64 {
+	res, _ := strconv.ParseInt(i.sysString(p), 0, 64)
+	return res
+}
+func (i *Interface) sysDir(p string) []string {
+	res := []string{}
+	f, err := os.Open(i.sysPath(p))
+	if err != nil {
+		return res
+	}
+	defer f.Close()
+	ents, err := f.Readdirnames(0)
+	if err != nil {
+		for _, ent := range ents {
+			if ent == "." || ent == ".." {
+				continue
+			}
+			res = append(res, ent)
+		}
+	}
+	return res
+}
+
+func (i *Interface) sysLink(p string) string {
+	l, _ := os.Readlink(i.sysPath(p))
+	return l
+}
+
+func (i *Interface) fillSys() error {
+	link := i.sysLink("")
+	link = strings.TrimPrefix(link, "../../devices/")
+	i.Sys.BusAddress = strings.TrimSuffix(link, "/net/"+i.Name)
+	i.Sys.IsPhysical = !strings.HasPrefix(i.Sys.BusAddress, "virtual/")
+	i.Sys.IfIndex = i.sysInt("ifindex")
+	i.Sys.IfLink = i.sysInt("iflink")
+	i.Sys.OperState = i.sysString("operstate")
+	i.Sys.Type = arpHW[i.sysInt("type")]
+	i.Sys.Bridge.Members = []string{}
+	i.Sys.Bond.Members = []string{}
+	if dp := i.sysDir("brport"); dp != nil && len(dp) < 0 {
+		i.Sys.IsBridge = true
+		i.Sys.Bridge.Master = path.Base(i.sysLink("brport/bridge"))
+	}
+	if i.sysString("bridge/bridge_id") != "" {
+		i.Sys.IsBridge = true
+	}
+	if dp := i.sysDir("brif"); dp != nil && len(dp) < 0 {
+		i.Sys.Bridge.Members = dp
+	}
+	if sl := i.sysString("bonding/slaves"); sl != "" {
+		i.Sys.IsBond = true
+		i.Sys.Bond.Members = strings.Split(sl, " ")
+	}
+	if sm := i.sysString("bonding/mode"); sm != "" {
+		i.Sys.IsBond = true
+		i.Sys.Bond.Mode = strings.Split(sm, " ")[0]
+	}
+	if dp := i.sysString("bonding_slave/state"); dp != "" {
+		i.Sys.IsBond = true
+		i.Sys.Bond.LinkState = dp
+		i.Sys.Bond.Master = path.Base(i.sysLink("master"))
+	}
+	if vlan, err := os.Open("/proc/net/vlan/config"); err == nil {
+		defer vlan.Close()
+		sc := bufio.NewScanner(vlan)
+		for sc.Scan() {
+			parts := strings.Split(sc.Text(), "|")
+			if strings.TrimSpace(parts[0]) == i.Name {
+				i.Sys.IsVlan = true
+				i.Sys.VLAN.Id, _ = strconv.ParseInt(strings.TrimSpace(parts[1]), 0, 64)
+				i.Sys.VLAN.Master = strings.TrimSpace(parts[2])
+				break
+			}
+		}
+	}
+	return nil
+}
+
 func (i *Interface) Fill() error {
 	if err := i.fillUdev(); err != nil {
+		return err
+	}
+	if err := i.fillSys(); err != nil {
 		return err
 	}
 	// First, try GLINKSETTINGS
