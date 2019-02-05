@@ -2,7 +2,11 @@ package storage
 
 import (
 	"bufio"
+	"encoding/json"
+	"fmt"
 	"os"
+	"os/exec"
+	"regexp"
 	"strings"
 	"syscall"
 )
@@ -24,7 +28,9 @@ type Volume struct {
 }
 
 type Info struct {
-	Volumes []Volume
+	Volumes     []Volume
+	Disks       []interface{}
+	Controllers []interface{}
 }
 
 func (i *Info) Class() string {
@@ -33,7 +39,9 @@ func (i *Info) Class() string {
 
 func Gather() (*Info, error) {
 	res := &Info{
-		Volumes: []Volume{},
+		Volumes:     []Volume{},
+		Disks:       []interface{}{},
+		Controllers: []interface{}{},
 	}
 
 	mounts, err := os.Open("/proc/self/mounts")
@@ -67,5 +75,53 @@ func Gather() (*Info, error) {
 		}
 		res.Volumes = append(res.Volumes, vol)
 	}
+
+	missingComma := regexp.MustCompile(`\n[ \t]*}[ \t]*{[ \t]*\n`)
+	trailingComma := regexp.MustCompile(`},$`)
+
+	if out, err := exec.Command("lshw", "-quiet", "-c", "storage", "-json").CombinedOutput(); err != nil {
+		return nil, err
+	} else {
+		objs := []interface{}{}
+
+		// Sometimes it doesn't have a wrapping array parts
+		sout := string(out)
+		sout = strings.TrimSpace(sout)
+		sout = trailingComma.ReplaceAllString(sout, "}")
+		if sout[0] != '[' {
+			sout = fmt.Sprintf("[%s]", sout)
+		}
+		// Sometimes it misses commas
+		sout = missingComma.ReplaceAllString(sout, "\n},{\n")
+
+		err = json.Unmarshal([]byte(sout), &objs)
+		if err != nil {
+			return nil, err
+		}
+		res.Controllers = objs
+	}
+
+	if out, err := exec.Command("lshw", "-quiet", "-c", "disk", "-json").CombinedOutput(); err != nil {
+		return nil, err
+	} else {
+		objs := []interface{}{}
+
+		// Sometime it doesn't have a wrapping array parts
+		sout := string(out)
+		sout = strings.TrimSpace(sout)
+		sout = trailingComma.ReplaceAllString(sout, "}")
+		if sout[0] != '[' {
+			sout = fmt.Sprintf("[%s]", sout)
+		}
+		// Sometimes it misses commas
+		sout = missingComma.ReplaceAllString(sout, "\n},{\n")
+
+		err = json.Unmarshal([]byte(sout), &objs)
+		if err != nil {
+			return nil, err
+		}
+		res.Disks = objs
+	}
+
 	return res, nil
 }
