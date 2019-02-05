@@ -34,7 +34,7 @@ func main() {
 	infos[sysInfo.Class()] = sysInfo
 	storInfo, err := storage.Gather()
 	if err != nil {
-		log.Fatalf("Failed tp gather storage info: %v", err)
+		log.Fatalf("Failed to gather storage info: %v", err)
 	}
 	infos[storInfo.Class()] = storInfo
 	enc := json.NewEncoder(os.Stdout)
