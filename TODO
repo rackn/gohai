@@ -1,14 +1,14 @@
 * Add a plugin that returns some distro-specific information (distro
   type, version, family, package formats, etc.)
 
-* Add a plugin that gets basic info about storage devices.  On Linux,
-  this should be based on what is present in /sys/block and
-  /sys/class/block.
-
 * Expand on the above plugin to include information about md and dm
   virtual devices on Linux systems.
 
 * Add information on mounted filesystems.
 
+# These two are kinda done by parsing lshw output
 * Add a plugin that knows how to get information about hardware RAID arrays.
+* Add a plugin that gets basic info about storage devices.  On Linux,
+  this should be based on what is present in /sys/block and
+  /sys/class/block.
 
