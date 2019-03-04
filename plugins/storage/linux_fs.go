@@ -76,52 +76,48 @@ func Gather() (*Info, error) {
 		res.Volumes = append(res.Volumes, vol)
 	}
 
-	missingComma := regexp.MustCompile(`\n[ \t]*}[ \t]*{[ \t]*\n`)
-	trailingComma := regexp.MustCompile(`},$`)
-
-	if out, err := exec.Command("lshw", "-quiet", "-c", "storage", "-json").CombinedOutput(); err != nil {
-		return nil, err
-	} else {
-		objs := []interface{}{}
-
-		// Sometimes it doesn't have a wrapping array parts
-		sout := string(out)
-		sout = strings.TrimSpace(sout)
-		sout = trailingComma.ReplaceAllString(sout, "}")
-		if sout[0] != '[' {
-			sout = fmt.Sprintf("[%s]", sout)
-		}
-		// Sometimes it misses commas
-		sout = missingComma.ReplaceAllString(sout, "\n},{\n")
-
-		err = json.Unmarshal([]byte(sout), &objs)
+	// We have lshw - use it.
+	if _, err := exec.Command("lshw", "--help").CombinedOutput(); err == nil {
+		objs, err := getLSHWPiece("storage")
 		if err != nil {
 			return nil, err
 		}
 		res.Controllers = objs
-	}
-
-	if out, err := exec.Command("lshw", "-quiet", "-c", "disk", "-json").CombinedOutput(); err != nil {
-		return nil, err
-	} else {
-		objs := []interface{}{}
-
-		// Sometime it doesn't have a wrapping array parts
-		sout := string(out)
-		sout = strings.TrimSpace(sout)
-		sout = trailingComma.ReplaceAllString(sout, "}")
-		if sout[0] != '[' {
-			sout = fmt.Sprintf("[%s]", sout)
-		}
-		// Sometimes it misses commas
-		sout = missingComma.ReplaceAllString(sout, "\n},{\n")
-
-		err = json.Unmarshal([]byte(sout), &objs)
+		objs, err = getLSHWPiece("storage")
 		if err != nil {
 			return nil, err
 		}
 		res.Disks = objs
 	}
-
 	return res, nil
+}
+
+var missingComma = regexp.MustCompile(`\n[ \t]*}[ \t]*{[ \t]*\n`)
+var trailingComma = regexp.MustCompile(`},$`)
+
+func getLSHWPiece(class string) ([]interface{}, error) {
+
+	out, err := exec.Command("lshw", "-quiet", "-c", class, "-json").CombinedOutput()
+	if err != nil {
+		return nil, err
+	}
+
+	objs := []interface{}{}
+
+	// Sometimes it doesn't have a wrapping array parts
+	sout := string(out)
+	sout = strings.TrimSpace(sout)
+	sout = trailingComma.ReplaceAllString(sout, "}")
+	if sout[0] != '[' {
+		sout = fmt.Sprintf("[%s]", sout)
+	}
+	// Sometimes it misses commas
+	sout = missingComma.ReplaceAllString(sout, "\n},{\n")
+
+	err = json.Unmarshal([]byte(sout), &objs)
+	if err != nil {
+		return nil, err
+	}
+
+	return objs, nil
 }
