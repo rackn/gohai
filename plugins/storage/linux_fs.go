@@ -83,7 +83,7 @@ func Gather() (*Info, error) {
 			return nil, err
 		}
 		res.Controllers = objs
-		objs, err = getLSHWPiece("storage")
+		objs, err = getLSHWPiece("disk")
 		if err != nil {
 			return nil, err
 		}
