@@ -133,6 +133,13 @@ func Gather() (*Info, error) {
 			if os.IsNotExist(err) {
 				continue
 			}
+			dtype := getInt64FromFile(fmt.Sprintf("/sys/block/%s/device/type", file), 0)
+			switch dtype {
+			case 0, 12, 13, 7:
+				// These are good.
+			default:
+				continue
+			}
 
 			disk := LogicalDisk{}
 			disk.Name = fmt.Sprintf("/dev/%s", file)
