@@ -21,6 +21,7 @@ type Memory struct {
 type Info struct {
 	BIOS       *godmi.BIOSInformation
 	System     *godmi.SystemInformation
+	Baseboards []*godmi.BaseboardInformation
 	Chassis    []*godmi.ChassisInformation
 	Processors Processors
 	Memory     Memory
@@ -53,6 +54,7 @@ func Gather() (res *Info, err error) {
 	if len(godmi.SystemInformations) == 1 {
 		res.System = godmi.SystemInformations[0]
 	}
+	res.Baseboards = godmi.BaseboardInformations
 	res.Chassis = godmi.ChassisInformations
 	res.Processors.Items = godmi.ProcessorInformations
 	for _, proc := range res.Processors.Items {
