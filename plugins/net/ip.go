@@ -231,6 +231,27 @@ func (f Flags) MarshalText() ([]byte, error) {
 	return []byte(f.String()), nil
 }
 
+func (f Flags) UnmarshalText(t []byte) error {
+	for _, flag := range strings.Split(string(t), "|") {
+		switch flag {
+		case "0":
+		case "up":
+			f = f | Flags(net.FlagUp)
+		case "broadcast":
+			f = f | Flags(net.FlagBroadcast)
+		case "loopback":
+			f = f | Flags(net.FlagLoopback)
+		case "pointtopoint":
+			f = f | Flags(net.FlagPointToPoint)
+		case "multicast":
+			f = f | Flags(net.FlagMulticast)
+		default:
+			return fmt.Errorf("Unknown flag %s", flag)
+		}
+	}
+	return nil
+}
+
 type HardwareAddr net.HardwareAddr
 
 func (h HardwareAddr) String() string {
@@ -241,14 +262,49 @@ func (h HardwareAddr) MarshalText() ([]byte, error) {
 	return []byte(h.String()), nil
 }
 
+// UnmarshalText unmarshalls the text represenatation of a
+// HardwareAddr.  Any format accepted by net.ParseMAC will be
+// accepted.
+func (h *HardwareAddr) UnmarshalText(buf []byte) error {
+	mac, err := net.ParseMAC(string(buf))
+	if err != nil {
+		return err
+	}
+	*h = HardwareAddr(mac)
+	return nil
+}
+
 type IPNet net.IPNet
 
 func (n *IPNet) String() string {
+	if len(n.Mask) == 0 {
+		return n.IP.String()
+	}
 	return (*net.IPNet)(n).String()
 }
 
 func (n *IPNet) MarshalText() ([]byte, error) {
 	return []byte(n.String()), nil
+}
+
+// UnmarshalText handles unmarshalling the string represenation of an
+// IP address (v4 and v6, in CIDR form and as a raw address) into an
+// IP.
+func (n *IPNet) UnmarshalText(buf []byte) error {
+	addr, cidr, err := net.ParseCIDR(string(buf))
+	if err == nil {
+		n.IP = addr
+		n.Mask = cidr.Mask
+		return nil
+	}
+	n.IP = net.ParseIP(string(buf))
+	n.Mask = nil
+	return nil
+}
+
+// IsCIDR returns whether this IP is in CIDR form.
+func (n *IPNet) IsCIDR() bool {
+	return len(n.Mask) > 0
 }
 
 type Interface struct {
