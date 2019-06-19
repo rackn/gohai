@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path"
 	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 	"syscall"
@@ -253,6 +254,8 @@ func (n *IPNet) MarshalText() ([]byte, error) {
 type Interface struct {
 	Name            string
 	StableName      string
+	OrdinalName     string
+	Path            string
 	Model           string
 	Driver          string
 	Vendor          string
@@ -385,14 +388,27 @@ func (i *Interface) fillUdev() error {
 			continue
 		}
 		switch parts[0] {
+		case "E: ID_BUS":
+			if i.Sys.IsPhysical && i.OrdinalName == "" {
+				i.OrdinalName = parts[1]
+			}
+		case "E: DEVTYPE":
+			if i.Sys.IsPhysical && i.OrdinalName != "onboard" {
+				i.OrdinalName = parts[1]
+			}
 		case "E: ID_MODEL_FROM_DATABASE":
 			i.Model = parts[1]
 		case "E: ID_NET_DRIVER":
 			i.Driver = parts[1]
 		case "E: ID_VENDOR_FROM_DATABASE":
 			i.Vendor = parts[1]
-		case "E: ID_NET_NAME_ONBOARD", "E: ID_NET_NAME_SLOT", "E: ID_NET_NAME_PATH":
+		case "E: ID_NET_NAME_ONBOARD":
+			i.OrdinalName = "onboard"
+			fallthrough
+		case "E: ID_NET_NAME_SLOT", "E: ID_NET_NAME_PATH":
 			stableNames[parts[0]] = parts[1]
+		case "E: ID_PATH":
+			i.Path = parts[1]
 		}
 	}
 	for _, n := range stableNameOrder {
@@ -448,7 +464,7 @@ func (i *Interface) fillSys() error {
 	link := i.sysLink("")
 	link = strings.TrimPrefix(link, "../../devices/")
 	i.Sys.BusAddress = strings.TrimSuffix(link, "/net/"+i.Name)
-	i.Sys.IsPhysical = !strings.HasPrefix(i.Sys.BusAddress, "virtual/")
+	i.Sys.IsPhysical = !strings.HasPrefix(i.Sys.BusAddress, "virtual")
 	i.Sys.IfIndex = i.sysInt("ifindex")
 	i.Sys.IfLink = i.sysInt("iflink")
 	i.Sys.OperState = i.sysString("operstate")
@@ -495,10 +511,10 @@ func (i *Interface) fillSys() error {
 }
 
 func (i *Interface) Fill() error {
-	if err := i.fillUdev(); err != nil {
+	if err := i.fillSys(); err != nil {
 		return err
 	}
-	if err := i.fillSys(); err != nil {
+	if err := i.fillUdev(); err != nil {
 		return err
 	}
 	// First, try GLINKSETTINGS
@@ -571,6 +587,17 @@ func Gather() (*Info, error) {
 		}
 		iface.Fill()
 		res.Interfaces[i] = iface
+	}
+	sort.SliceStable(res.Interfaces, func(i, j int) bool { return res.Interfaces[i].Path < res.Interfaces[j].Path })
+	indexes := map[string]int{}
+	for i := range res.Interfaces {
+		if idx, ok := indexes[res.Interfaces[i].OrdinalName]; ok {
+			indexes[res.Interfaces[i].OrdinalName]++
+			res.Interfaces[i].OrdinalName = fmt.Sprintf("%s:%d", res.Interfaces[i].OrdinalName, idx)
+		} else if res.Interfaces[i].OrdinalName != "" {
+			indexes[res.Interfaces[i].OrdinalName] = 2
+			res.Interfaces[i].OrdinalName = fmt.Sprintf("%s:%d", res.Interfaces[i].OrdinalName, 1)
+		}
 	}
 	return res, nil
 }
