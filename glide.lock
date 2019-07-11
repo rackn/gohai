@@ -1,6 +1,6 @@
 hash: cde00a30d5309b1b0708353af9ebf25a6d0047bf1c22f6d79d6cca040ed2e269
-updated: 2019-07-10T16:05:04.856926164-05:00
+updated: 2019-07-11T11:32:39.127071778-05:00
 imports:
 - name: github.com/VictorLowther/godmi
-  version: 4bf8946d7264eb7ba7d42e9cae53f151291798c0
+  version: e8a481b39569e0f5b2dbd613e0b706ef1e1643bb
 testImports: []
