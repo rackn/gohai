@@ -1,3 +1,5 @@
+// +build !ppc64le
+
 package dmi
 
 import (
@@ -106,6 +108,6 @@ func Gather() (res *Info, err error) {
 			res.Memory.PopulatedSlots += 1
 		}
 	}
-	res.Hypervisor,_ = DetectVirtType(res)
+	res.Hypervisor, _ = DetectVirtType(res)
 	return
 }
